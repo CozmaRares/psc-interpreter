@@ -1,0 +1,3 @@
+comment the code
+check for consistency
+explain how to use
