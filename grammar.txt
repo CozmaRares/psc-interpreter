@@ -1,0 +1,40 @@
+body: (END_LINE expression)*
+
+flow_control: KEYWORD-if expression KEYWORD-then body (KEYWORD-else body)? KEYWORD-end
+		    : KEYWORD-for IDENTIFIER (BOX_BRACKET_LEFT expression BOX_BRACKET_RIGHT)* ASSIGNMENT expression COMMA expression (COMMA expression)? KEYWORD-execute body KEYWORD-end
+		    : KEYWORD-while expression KEYWORD-execute body KEYWORD-end
+		    : KEYWORD-do body KEYWORD-until expression 
+		    : KEYWORD-try body (KEYWORD-catch body)? KEYWORD-end 
+		    : KEYWORD-function IDENTIFIER ROUND_BRACKET_LEFT (IDENTIFIER (COMMA IDENTIFIER)*)? ROUND_BRACKET_RIGHT COLON body KEYWORD-end
+		    : KEYWORD-return expression
+		    : KEYWORD-break 
+		    : KEYWORD-continue
+		    : KEYWORD-include STRING 
+		    : KEYWORD-run STRING
+		    : KEYWORD-read IDENTIFIER (BOX_BRACKET_LEFT expression BOX_BRACKET_RIGHT)* (COMMA IDENTIFIER (BOX_BRACKET_LEFT expression BOX_BRACKET_RIGHT)*)* (COLON IDENTIFIER)?
+		    : KEYWORD-print expression (COMMA expression)* (COLON IDENTIFIER)?
+
+base: NUMBER
+    : CHAR
+    : STRING
+    : IDENTIFIER
+    : (PLUS | MINUS) base
+    : ROUND_BRACKET_LEFT expression ROUND_BRACKET_RIGHT
+    : BOX_BRACKET_LEFT (expression (COMMA expression)*)? BOX_BRACKET_RIGHT 
+    : CURLY_BRACKET_LEFT (expression COLON expression (COMMA expression COLON expression)*)? CURLY_BRACKET_RIGHT 
+    : base ((BOX_BRACKET_LEFT | ROUND_BRACKET_LEFT) expression (BOX_BRACKET_RIGHT | ROUND_BRACKET_RIGHT))*
+    : flow_control 
+
+factor: base ((MULT | DIV | MOD) base)* 
+
+term: factor ((PLUS | MINUS) factor)*
+
+comparison: term ((EQUALS | LESS | LESS OR EQUAL | GREATER | GREATER OR EQUAL | DIFFERENT) term)*
+
+expression: (KEYWORD-const)? IDENTIFIER (BOX_BRACKET_LEFT expression BOX_BRACKET_RIGHT)* ASSIGNMENT expression 
+	      : comparison ((AND | OR) comparison)*
+
+Legend:
+a | b -> a or b
+a? -> a is optional
+a* -> repeat a for 0 or more times

@@ -1,0 +1,7 @@
+"NULL" ""
+"NUMBER" ""
+"CHAR" ""
+"ARRAY" ""
+"STRING" ""
+"DICTIONARY" ""
+"FUNCTION" ""
