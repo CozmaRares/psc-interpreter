@@ -10,4 +10,4 @@ AllowShortLoopsOnASingleLine: true
 AlignConsecutiveMacros: AcrossEmptyLinesAndComments
 AlignConsecutiveAssignments:  Consecutive
 AllowShortIfStatementsOnASingleLine: Never
-
+AccessModifierOffset: -2

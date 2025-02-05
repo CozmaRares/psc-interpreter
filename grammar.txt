@@ -1,40 +1,92 @@
-body: (END_LINE expression)*
+Z ::= EXPRESSION EXPRESSIONS
 
-flow_control: KEYWORD-if expression KEYWORD-then body (KEYWORD-else body)? KEYWORD-end
-		    : KEYWORD-for IDENTIFIER (BOX_BRACKET_LEFT expression BOX_BRACKET_RIGHT)* ASSIGNMENT expression COMMA expression (COMMA expression)? KEYWORD-execute body KEYWORD-end
-		    : KEYWORD-while expression KEYWORD-execute body KEYWORD-end
-		    : KEYWORD-do body KEYWORD-until expression 
-		    : KEYWORD-try body (KEYWORD-catch body)? KEYWORD-end 
-		    : KEYWORD-function IDENTIFIER ROUND_BRACKET_LEFT (IDENTIFIER (COMMA IDENTIFIER)*)? ROUND_BRACKET_RIGHT COLON body KEYWORD-end
-		    : KEYWORD-return expression
-		    : KEYWORD-break 
-		    : KEYWORD-continue
-		    : KEYWORD-include STRING 
-		    : KEYWORD-run STRING
-		    : KEYWORD-read IDENTIFIER (BOX_BRACKET_LEFT expression BOX_BRACKET_RIGHT)* (COMMA IDENTIFIER (BOX_BRACKET_LEFT expression BOX_BRACKET_RIGHT)*)* (COLON IDENTIFIER)?
-		    : KEYWORD-print expression (COMMA expression)* (COLON IDENTIFIER)?
+EXPRESSIONS ::= ('\n' EXPRESSION)*
 
-base: NUMBER
-    : CHAR
-    : STRING
-    : IDENTIFIER
-    : (PLUS | MINUS) base
-    : ROUND_BRACKET_LEFT expression ROUND_BRACKET_RIGHT
-    : BOX_BRACKET_LEFT (expression (COMMA expression)*)? BOX_BRACKET_RIGHT 
-    : CURLY_BRACKET_LEFT (expression COLON expression (COMMA expression COLON expression)*)? CURLY_BRACKET_RIGHT 
-    : base ((BOX_BRACKET_LEFT | ROUND_BRACKET_LEFT) expression (BOX_BRACKET_RIGHT | ROUND_BRACKET_RIGHT))*
-    : flow_control 
+EXPRESSION ::= EXPRESSION_IF
+             | EXPRESSION_FOR
+             | EXPRESSION_WHILE
+             | EXPRESSION_DO_UNTIL
+             | EXPRESSION_CONTINUE
+             | EXPRESSION_BREAK
+             | EXPRESSION_TRYCATCH
+             | EXPRESSION_THROW
+             | EXPRESSION_FUNCTION
+             | EXPRESSION_RETURN
+             | EXPRESSION_INCLUDE
+             | EXPRESSION_RUN
+             | EXPRESSION_READ
+             | EXPRESSION_PRINT
+             | ASSIGNMENT
+             | OPERATION
 
-factor: base ((MULT | DIV | MOD) base)* 
+EXPRESSION_IF ::= <if> EXPRESSION <then> EXPRESSIONS (<else> EXPRESSIONS)? <end>
 
-term: factor ((PLUS | MINUS) factor)*
+EXPRESSION_FOR ::= <for> identifier '<-' EXPRESSION ',' EXPRESSION (',' EXPRESSION)? <execute> EXPRESSIONS <end>
 
-comparison: term ((EQUALS | LESS | LESS OR EQUAL | GREATER | GREATER OR EQUAL | DIFFERENT) term)*
+EXPRESSION_WHILE ::= <while> EXPRESSION <execute> EXPRESSIONS <end>
 
-expression: (KEYWORD-const)? IDENTIFIER (BOX_BRACKET_LEFT expression BOX_BRACKET_RIGHT)* ASSIGNMENT expression 
-	      : comparison ((AND | OR) comparison)*
+EXPRESSION_DO_UNTIL ::= <do> EXPRESSIONS <until> EXPRESSION
 
-Legend:
-a | b -> a or b
-a? -> a is optional
-a* -> repeat a for 0 or more times
+EXPRESSION_CONTINUE ::= <continue>
+
+EXPRESSION_BREAK ::= <break>
+
+EXPRESSION_TRYCATCH ::= <try> EXPRESSIONS <catch> identifier <then> EXPRESSIONS <end>
+
+EXPRESSION_THROW ::= <throw> EXPRESSION
+
+EXPRESSION_FUNCTION ::= <function> identifier '(' (identifier (',' identifier)*)? ')' ':' EXPRESSIONS <end>
+
+EXPRESSION_RETURN ::= <return> EXPRESSION
+
+EXPRESSION_INCLUDE ::= <include> string
+
+EXPRESSION_RUN ::= <run> string
+
+EXPRESSION_READ ::= <read> ('<' identifier '>')? identifier (',' identifier)*
+
+EXPRESSION_PRINT ::= <print> ('<' identifier '>')? EXPRESSION (',' EXPRESSION)*
+
+ASSIGNMENT ::= <let> identifier INDEX_ACCESS* '<-' EXPRESSION
+
+INDEX_ACCESS ::= '[' EXPRESSION ']'
+
+OPERATION ::= COMPARISON ( (<and> | <or>) COMPARISON )*
+
+COMPARISON ::= ARITH ( ('=' | '<' | '<=' | '>' | '>=' | '!=') ARITH )*
+
+ARITH ::= TERM ( ('+' | '-') TERM )*
+
+TERM ::= FACTOR ( ('*' | '/' | '%') FACTOR )*
+
+FACTOR ::= BASE FN_CALL
+         | BASE INDEX_ACCESS*
+
+FN_CALL ::= '(' ( EXPRESSION (',' EXPRESSION)* )? ')'
+
+BASE ::= number
+       | char
+       | string
+       | identifier
+       | ARRAY
+       | DICTIONARY
+       | '(' EXPRESSION ')'
+       | UNARY
+
+ARRAY ::= '[' (EXPRESSION (',' EXPRESSION)*)? ']'
+
+DICTIONARY ::= '{' (EXPRESSION ':' EXPRESSION (',' EXPRESSION ':' EXPRESSION)*)? '}'
+
+UNARY ::= ('+' | '-') BASE
+
+identifier ::= [a-zA-Z_][a-zA-Z0-9_]* % regex
+
+number ::= [0-9]+ ('.' [0-9]+)? % regex
+
+string ::= '"' char1* '"'
+
+char ::= "'" char1 "'"
+
+char1 ::= escaped_char | [^'\\]
+
+escaped_char ::= '\\' ['"\\0abfnrtv] % \' \" \0 \a \b \f \n \r \t \v
