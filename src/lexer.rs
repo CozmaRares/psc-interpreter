@@ -42,18 +42,40 @@ impl<'a> LexerState<'a> {
 }
 
 #[derive(Debug, Error)]
+pub enum LexErrorKind {
+    #[error("Invalid number with multiple decimal points")]
+    MultipleDecimalPoints,
+
+    #[error("Number could not be parsed\n{0}")]
+    InvalidNumber(#[from] std::num::ParseFloatError),
+
+    #[error("Invalid escape sequence: {0}")]
+    InvalidEscapeSequence(char),
+
+    #[error("Expected ' after char")]
+    ExpectedApostrophe,
+
+    #[error("Expected \" after string")]
+    ExpectedQuote,
+
+    #[error("Unknown character")]
+    UnknownCharacter,
+}
+
+#[derive(Debug, Error)]
 pub struct LexError {
-    message: String,
+    kind: LexErrorKind,
     line: String,
     line_number: usize,
     position: usize,
 }
 
 impl std::fmt::Display for LexError {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let line_number_str = format!("{:>4}", self.line_number);
 
-        writeln!(f, "Error: {}", self.message)?;
+        writeln!(f, "Error: {}", self.kind)?;
         writeln!(f)?;
         writeln!(f, "{} | {}", line_number_str, self.line)?;
         writeln!(
@@ -67,13 +89,43 @@ impl std::fmt::Display for LexError {
 }
 
 impl LexError {
-    fn new(state: &LexerState, message: String) -> Self {
+    #[inline]
+    fn multiple_decimals(state: &LexerState) -> Self {
+        Self::new(state, LexErrorKind::MultipleDecimalPoints)
+    }
+
+    #[inline]
+    fn invalid_number(state: &LexerState, e: std::num::ParseFloatError) -> Self {
+        Self::new(state, LexErrorKind::InvalidNumber(e))
+    }
+
+    #[inline]
+    fn invalid_escape_sequence(state: &LexerState, ch: char) -> Self {
+        Self::new(state, LexErrorKind::InvalidEscapeSequence(ch))
+    }
+
+    #[inline]
+    fn expected_apostrophe(state: &LexerState) -> Self {
+        Self::new(state, LexErrorKind::ExpectedApostrophe)
+    }
+
+    #[inline]
+    fn expected_quote(state: &LexerState) -> Self {
+        Self::new(state, LexErrorKind::ExpectedQuote)
+    }
+
+    #[inline]
+    fn unknown_character(state: &LexerState) -> Self {
+        Self::new(state, LexErrorKind::UnknownCharacter)
+    }
+
+    fn new(state: &LexerState, kind: LexErrorKind) -> Self {
         let next_line = state.input[state.cursor..]
             .find('\n')
             .map_or(state.input.len(), |i| i + state.cursor);
 
         Self {
-            message,
+            kind,
             line: state.input[state.bol..next_line].to_string(),
             position: state.cursor - state.bol,
             line_number: state.line_number,
@@ -222,10 +274,7 @@ impl Lexer {
                 '0'..='9' => {}
                 '.' => {
                     if has_decimal {
-                        return Err(LexError::new(
-                            state,
-                            "Invalid number with multiple decimal points".to_string(),
-                        ));
+                        return Err(LexError::multiple_decimals(state));
                     }
                     has_decimal = true;
                 }
@@ -239,7 +288,7 @@ impl Lexer {
 
         match number {
             Ok(n) => Ok(Token::Number(n)),
-            Err(_) => Err(LexError::new(state, "Invalid number".to_string())),
+            Err(e) => Err(LexError::invalid_number(state, e)),
         }
     }
 
@@ -254,7 +303,7 @@ impl Lexer {
 
             match escaped {
                 Some(c) => Ok(Token::Char(c)),
-                None => Err(LexError::new(state, "Invalid escape sequence".to_string())),
+                None => Err(LexError::invalid_escape_sequence(state, ch)),
             }
         } else {
             Ok(Token::Char(ch))
@@ -263,7 +312,7 @@ impl Lexer {
         state.advance();
 
         if state.current() != '\'' {
-            return Err(LexError::new(state, "Expected ' after char".to_string()));
+            return Err(LexError::expected_apostrophe(state));
         }
         state.advance();
 
@@ -288,7 +337,7 @@ impl Lexer {
                 match escaped {
                     Some(c) => literal.push(c),
                     None => {
-                        return Err(LexError::new(state, "Invalid escape sequence".to_string()))
+                        return Err(LexError::invalid_escape_sequence(state, ch));
                     }
                 }
             } else {
@@ -298,7 +347,7 @@ impl Lexer {
         }
 
         if state.current() != '"' {
-            return Err(LexError::new(state, "Expected \" after string".to_string()));
+            return Err(LexError::expected_quote(state));
         }
         state.advance();
 
@@ -368,7 +417,7 @@ impl Lexer {
         }
 
         if start == state.cursor {
-            return Err(LexError::new(state, "Unknown character".to_string()));
+            return Err(LexError::unknown_character(state));
         }
 
         let word = &state.input[start..state.cursor];
