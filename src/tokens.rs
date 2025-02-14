@@ -1,5 +1,5 @@
-#[derive(Debug)]
-pub enum Token{
+#[derive(Debug, PartialEq)]
+pub enum Token {
     // literals
     Number(f64),
     Char(char),

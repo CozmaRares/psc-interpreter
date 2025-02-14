@@ -27,7 +27,7 @@ impl<'a> LexerState<'a> {
 
     #[inline]
     fn advance(&mut self) {
-        if self.current().unwrap() == '\n' {
+        if self.current() == '\n' {
             self.bol = self.cursor;
             self.line_number += 1;
         }
@@ -36,11 +36,8 @@ impl<'a> LexerState<'a> {
     }
 
     #[inline]
-    fn current(&self) -> Result<char, LexError> {
-        match self.input.chars().nth(self.cursor) {
-            Some(c) => Ok(c),
-            None => Err(LexError::new(self, "Unexpected end of input".to_string())),
-        }
+    fn current(&self) -> char {
+        self.input.chars().nth(self.cursor).unwrap_or('\0')
     }
 }
 
@@ -54,10 +51,17 @@ pub struct LexError {
 
 impl std::fmt::Display for LexError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let line_number_str = format!("{:>4}", self.line_number);
+
         writeln!(f, "Error: {}", self.message)?;
         writeln!(f)?;
-        writeln!(f, "{} | {}", self.line_number, self.line)?;
-        writeln!(f, "{:>1$}^-- Here", " ", self.position)?;
+        writeln!(f, "{} | {}", line_number_str, self.line)?;
+        writeln!(
+            f,
+            "{:>1$}^-- Here",
+            " ",
+            line_number_str.len() + self.position + 3
+        )?;
         Ok(())
     }
 }
@@ -66,7 +70,7 @@ impl LexError {
     fn new(state: &LexerState, message: String) -> Self {
         let next_line = state.input[state.cursor..]
             .find('\n')
-            .unwrap_or(state.input.len());
+            .map_or(state.input.len(), |i| i + state.cursor);
 
         Self {
             message,
@@ -113,16 +117,16 @@ impl Lexer {
         let mut state = LexerState::new(input);
 
         while !state.is_at_end() {
-            let ch = state.current().unwrap(); // first char is always valid
+            let ch = state.current();
 
             // ignore whitespace
-            if ch.is_whitespace() {
+            if ch != '\n' && ch.is_whitespace() {
                 state.advance();
                 continue;
             }
 
             let res = match ch {
-                '0'..='9' => Lexer::match_number(&mut state),
+                '0'..='9' | '.' => Lexer::match_number(&mut state),
                 '\'' => Lexer::match_char(&mut state),
                 '"' => Lexer::match_string(&mut state),
 
@@ -196,6 +200,11 @@ impl Lexer {
                 _ => Lexer::match_word(&mut state),
             };
 
+            // consume faulty character
+            if res.is_err() {
+                state.advance();
+            }
+
             results.push(res);
         }
 
@@ -204,33 +213,43 @@ impl Lexer {
 
     fn match_number(state: &mut LexerState) -> LexResult1 {
         let start = state.cursor;
+        let mut has_decimal = false;
 
-        while !state.is_at_end() && state.current()?.is_ascii_digit() {
+        while !state.is_at_end() {
+            let ch = state.current();
+
+            match ch {
+                '0'..='9' => {}
+                '.' => {
+                    if has_decimal {
+                        return Err(LexError::new(
+                            state,
+                            "Invalid number with multiple decimal points".to_string(),
+                        ));
+                    }
+                    has_decimal = true;
+                }
+                _ => break,
+            }
+
             state.advance();
         }
 
-        if state.is_at_end() {
-            return parse_number(state, start);
-        }
+        let number = state.input[start..state.cursor].parse::<f64>();
 
-        if state.current()? == '.' {
-            state.advance();
+        match number {
+            Ok(n) => Ok(Token::Number(n)),
+            Err(_) => Err(LexError::new(state, "Invalid number".to_string())),
         }
-
-        while state.current()?.is_ascii_digit() {
-            state.advance();
-        }
-
-        parse_number(state, start)
     }
 
     fn match_char(state: &mut LexerState) -> LexResult1 {
         state.advance(); // consume the '
-        let ch = state.current()?;
+        let ch = state.current();
 
         let token = if ch == '\\' {
             state.advance();
-            let ch = state.current()?;
+            let ch = state.current();
             let escaped = get_escape_char(ch);
 
             match escaped {
@@ -243,7 +262,7 @@ impl Lexer {
 
         state.advance();
 
-        if state.current()? != '\'' {
+        if state.current() != '\'' {
             return Err(LexError::new(state, "Expected ' after char".to_string()));
         }
         state.advance();
@@ -256,14 +275,14 @@ impl Lexer {
         let mut literal = String::new();
 
         while !state.is_at_end() {
-            let ch = state.current()?;
+            let ch = state.current();
             if ch == '"' {
                 break;
             }
 
             if ch == '\\' {
                 state.advance();
-                let ch = state.current()?;
+                let ch = state.current();
                 let escaped = get_escape_char(ch);
 
                 match escaped {
@@ -278,7 +297,7 @@ impl Lexer {
             state.advance();
         }
 
-        if state.current()? != '"' {
+        if state.current() != '"' {
             return Err(LexError::new(state, "Expected \" after string".to_string()));
         }
         state.advance();
@@ -293,7 +312,7 @@ impl Lexer {
             return Ok(Token::Greater);
         }
 
-        let ch = state.current()?;
+        let ch = state.current();
 
         let tok = match ch {
             '=' => Some(Token::GreaterEqual),
@@ -316,7 +335,7 @@ impl Lexer {
             return Ok(Token::Less);
         }
 
-        let ch = state.current()?;
+        let ch = state.current();
 
         let tok = match ch {
             '=' => Some(Token::LessEqual),
@@ -339,7 +358,7 @@ impl Lexer {
         let mut first = true;
 
         while !state.is_at_end() {
-            let ch = state.current()?;
+            let ch = state.current();
             if !is_identifier_char(ch, first) {
                 break;
             }
@@ -386,8 +405,10 @@ impl Lexer {
     }
 }
 
+#[inline]
 fn get_escape_char(ch: char) -> Option<char> {
     match ch {
+        '0' => Some('\0'),
         'n' => Some('\n'),
         'r' => Some('\r'),
         't' => Some('\t'),
@@ -398,6 +419,7 @@ fn get_escape_char(ch: char) -> Option<char> {
     }
 }
 
+#[inline]
 fn is_identifier_char(ch: char, first: bool) -> bool {
     let lower = ch.is_ascii_lowercase();
     let upper = ch.is_ascii_lowercase();
@@ -406,11 +428,287 @@ fn is_identifier_char(ch: char, first: bool) -> bool {
     ch == '_' || lower || upper || digit
 }
 
-fn parse_number(state: &mut LexerState, start: usize) -> LexResult1 {
-    let number = state.input[start..state.cursor].parse::<f64>();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    match number {
-        Ok(n) => Ok(Token::Number(n)),
-        Err(_) => Err(LexError::new(state, "Invalid number".to_string())),
+    mod literals {
+        use super::*;
+
+        #[test]
+        fn number_literals() {
+            let input = "123 45.67 0.89 .42";
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::Number(123.0),
+                    Token::Number(45.67),
+                    Token::Number(0.89),
+                    Token::Number(0.42),
+                ]
+            );
+        }
+
+        #[test]
+        fn string_literals() {
+            let input = r#""hello" "world\n" "escaped\"quote""#;
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::String("hello".to_string()),
+                    Token::String("world\n".to_string()),
+                    Token::String("escaped\"quote".to_string()),
+                ]
+            );
+        }
+
+        #[test]
+        fn char_literals() {
+            let input = r"'a' '\n' '\\'";
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(
+                tokens,
+                vec![Token::Char('a'), Token::Char('\n'), Token::Char('\\'),]
+            );
+        }
+
+        #[test]
+        fn identifiers() {
+            let input = "foo bar_baz _qux123";
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::Identifier("foo".to_string()),
+                    Token::Identifier("bar_baz".to_string()),
+                    Token::Identifier("_qux123".to_string()),
+                ]
+            );
+        }
+    }
+
+    mod constants {
+        use super::*;
+
+        #[test]
+        fn constant_keywords() {
+            let input = "null true false";
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(tokens, vec![Token::Null, Token::True, Token::False]);
+        }
+    }
+
+    mod keywords {
+        use super::*;
+
+        #[test]
+        fn all_keywords() {
+            let input = "let if then else end for execute while do until print read throw try catch function return continue break include run";
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::Let,
+                    Token::If,
+                    Token::Then,
+                    Token::Else,
+                    Token::End,
+                    Token::For,
+                    Token::Execute,
+                    Token::While,
+                    Token::Do,
+                    Token::Until,
+                    Token::Print,
+                    Token::Read,
+                    Token::Throw,
+                    Token::Try,
+                    Token::Catch,
+                    Token::Function,
+                    Token::Return,
+                    Token::Continue,
+                    Token::Break,
+                    Token::Include,
+                    Token::Run,
+                ]
+            );
+        }
+    }
+
+    mod operators {
+        use super::*;
+
+        #[test]
+        fn all_operators() {
+            let input = "+ - * / % = < <= > >= <> <- or and";
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::Plus,
+                    Token::Minus,
+                    Token::Multiply,
+                    Token::Divide,
+                    Token::Modulo,
+                    Token::Equals,
+                    Token::Less,
+                    Token::LessEqual,
+                    Token::Greater,
+                    Token::GreaterEqual,
+                    Token::Different,
+                    Token::Assignment,
+                    Token::Or,
+                    Token::And,
+                ]
+            );
+        }
+
+        #[test]
+        fn ending_less_greater() {
+            let input = "<";
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(tokens, vec![Token::Less]);
+
+            let input = ">";
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(tokens, vec![Token::Greater]);
+        }
+    }
+
+    mod delimiters {
+        use super::*;
+
+        #[test]
+        fn all_delimiters() {
+            let input = "()[]{} , : \n";
+
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::ParenLeft,
+                    Token::ParenRight,
+                    Token::BracketLeft,
+                    Token::BracketRight,
+                    Token::CurlyLeft,
+                    Token::CurlyRight,
+                    Token::Comma,
+                    Token::Colon,
+                    Token::Endline,
+                ]
+            );
+        }
+    }
+
+    mod edge_cases {
+        use super::*;
+
+        #[test]
+        fn empty_input() {
+            let input = "";
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert!(tokens.is_empty());
+        }
+
+        #[test]
+        fn whitespace_handling() {
+            let input = "  let\tx\n<-5  ";
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::Let,
+                    Token::Identifier("x".to_string()),
+                    Token::Endline,
+                    Token::Assignment,
+                    Token::Number(5.0),
+                ]
+            );
+        }
+
+        #[test]
+        fn identifier_vs_keyword() {
+            let input = "nullx true123 falsey";
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::Identifier("nullx".to_string()),
+                    Token::Identifier("true123".to_string()),
+                    Token::Identifier("falsey".to_string()),
+                ]
+            );
+        }
+    }
+
+    mod error_handling {
+        use super::*;
+
+        #[test]
+        fn invalid_char() {
+            let input = "~";
+            let result = Lexer::tokenize(input);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn unterminated_string() {
+            let input = "\"hello";
+            let result = Lexer::tokenize(input);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn unterminated_char() {
+            let input = "'a";
+            let result = Lexer::tokenize(input);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn invalid_number() {
+            let input = "123.45.67";
+            let result = Lexer::tokenize(input);
+            assert!(result.is_err());
+        }
+    }
+
+    mod integration {
+        use super::*;
+
+        #[test]
+        fn sample_program() {
+            let input = r#"
+                let x <- 5
+                if x = 5 then
+                    print "hello"
+                end
+            "#;
+
+            let tokens = Lexer::tokenize(input).unwrap();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::Endline,
+                    Token::Let,
+                    Token::Identifier("x".to_string()),
+                    Token::Assignment,
+                    Token::Number(5.0),
+                    Token::Endline,
+                    Token::If,
+                    Token::Identifier("x".to_string()),
+                    Token::Equals,
+                    Token::Number(5.0),
+                    Token::Then,
+                    Token::Endline,
+                    Token::Print,
+                    Token::String("hello".to_string()),
+                    Token::Endline,
+                    Token::End,
+                    Token::Endline,
+                ]
+            );
+        }
     }
 }
