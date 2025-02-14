@@ -1,4 +1,6 @@
 mod lexer;
+mod nodes;
+mod parser;
 mod tokens;
 
 use std::io;

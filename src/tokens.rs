@@ -1,5 +1,7 @@
 #[derive(Debug, PartialEq)]
 pub enum Token {
+    None, // used for peeking in parser state
+
     // literals
     Number(f64),
     Char(char),
@@ -60,4 +62,63 @@ pub enum Token {
     Comma,
     Colon,
     Endline,
+}
+
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::None => write!(f, "none"),
+            Token::Number(n) => write!(f, "{}", n),
+            Token::Char(c) => write!(f, "'{}'", c),
+            Token::String(s) => write!(f, "\"{}\"", s),
+            Token::Identifier(s) => write!(f, "{}", s),
+            Token::Null => write!(f, "null"),
+            Token::True => write!(f, "true"),
+            Token::False => write!(f, "false"),
+            Token::Let => write!(f, "let"),
+            Token::If => write!(f, "if"),
+            Token::Then => write!(f, "then"),
+            Token::Else => write!(f, "else"),
+            Token::End => write!(f, "end"),
+            Token::For => write!(f, "for"),
+            Token::Execute => write!(f, "execute"),
+            Token::While => write!(f, "while"),
+            Token::Do => write!(f, "do"),
+            Token::Until => write!(f, "until"),
+            Token::Print => write!(f, "print"),
+            Token::Read => write!(f, "read"),
+            Token::Throw => write!(f, "throw"),
+            Token::Try => write!(f, "try"),
+            Token::Catch => write!(f, "catch"),
+            Token::Function => write!(f, "function"),
+            Token::Return => write!(f, "return"),
+            Token::Continue => write!(f, "continue"),
+            Token::Break => write!(f, "break"),
+            Token::Include => write!(f, "include"),
+            Token::Run => write!(f, "run"),
+            Token::Plus => write!(f, "+"),
+            Token::Minus => write!(f, "-"),
+            Token::Multiply => write!(f, "*"),
+            Token::Divide => write!(f, "/"),
+            Token::Modulo => write!(f, "%"),
+            Token::Equals => write!(f, "="),
+            Token::Less => write!(f, "<"),
+            Token::LessEqual => write!(f, "<="),
+            Token::Greater => write!(f, ">"),
+            Token::GreaterEqual => write!(f, ">="),
+            Token::Different => write!(f, "<>"),
+            Token::Assignment => write!(f, "<-"),
+            Token::Or => write!(f, "or"),
+            Token::And => write!(f, "and"),
+            Token::ParenLeft => write!(f, "("),
+            Token::ParenRight => write!(f, ")"),
+            Token::BracketLeft => write!(f, "["),
+            Token::BracketRight => write!(f, "]"),
+            Token::CurlyLeft => write!(f, "{{"),
+            Token::CurlyRight => write!(f, "}}"),
+            Token::Comma => write!(f, ","),
+            Token::Colon => write!(f, ":"),
+            Token::Endline => write!(f, "endline"),
+        }
+    }
 }

@@ -1,0 +1,90 @@
+z ::= expression expressions
+
+expressions ::= ('\n' expression)*
+
+expression ::= expression_if
+             | expression_for
+             | expression_while
+             | expression_do_until
+             | expression_continue
+             | expression_break
+             | expression_trycatch
+             | expression_throw
+             | expression_function
+             | expression_return
+             | expression_include
+             | expression_run
+             | expression_read
+             | expression_print
+             | assignment
+             | operation
+
+expression_if ::= <if> expression <then> expressions (<else> expressions)? <end>
+
+expression_for ::= <for> IDENTIFIER '<-' expression ',' expression (',' expression)? <execute> expressions <end>
+
+expression_while ::= <while> expression <execute> expressions <end>
+
+expression_do_until ::= <do> expressions <until> expression
+
+expression_continue ::= <continue>
+
+expression_break ::= <break>
+
+expression_trycatch ::= <try> expressions <catch> IDENTIFIER <then> expressions <end>
+
+expression_throw ::= <throw> expression
+
+expression_function ::= <function> IDENTIFIER '(' (IDENTIFIER (',' IDENTIFIER)*)? ')' ':' expressions <end>
+
+expression_return ::= <return> expression
+
+expression_include ::= <include> STRING
+
+expression_run ::= <run> STRING
+
+expression_read ::= <read> ('<' IDENTIFIER '>')? IDENTIFIER (',' IDENTIFIER)*
+
+expression_print ::= <print> ('<' IDENTIFIER '>')? expression (',' expression)*
+
+assignment ::= <let> IDENTIFIER index_access* '<-' expression
+
+index_access ::= '[' expression ']'
+
+operation ::= comparison ( (<and> | <or>) comparison )*
+
+comparison ::= arith ( ('=' | '<' | '<=' | '>' | '>=' | '!=') arith )*
+
+arith ::= term ( ('+' | '-') term )*
+
+term ::= factor ( ('*' | '/' | '%') factor )*
+
+factor ::= base fn_call
+         | base index_access*
+
+fn_call ::= '(' ( expression (',' expression)* )? ')'
+
+base ::= NUMBER
+       | CHAR
+       | STRING
+       | IDENTIFIER
+       | array
+       | dictionary
+       | '(' expression ')'
+       | unary
+
+array ::= '[' (expression (',' expression)*)? ']'
+
+dictionary ::= '{' (expression ':' expression (',' expression ':' expression)*)? '}'
+
+unary ::= ('+' | '-') base
+
+IDENTIFIER ::= [a-zA-Z_][a-zA-Z0-9_]* % regex
+
+NUMBER ::= [0-9]+ ('.' [0-9]+)? % regex
+
+STRING  ::= '"' escaped_char | [^"\\] '"' % inverted the notation here ('"' instead of "\"")
+
+CHAR ::= "'" escaped_char | [^'\\] "'"
+
+escaped_char ::= '\\' ['"\\0nrt] % \' \" \\ \0 \n \r \t
