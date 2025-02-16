@@ -231,15 +231,15 @@ impl Lexer {
                 }
                 '*' => {
                     state.advance();
-                    Ok(Token::Multiply)
+                    Ok(Token::Star)
                 }
                 '/' => {
                     state.advance();
-                    Ok(Token::Divide)
+                    Ok(Token::Slash)
                 }
                 '%' => {
                     state.advance();
-                    Ok(Token::Modulo)
+                    Ok(Token::Percent)
                 }
                 '=' => {
                     state.advance();
@@ -597,9 +597,9 @@ mod tests {
                 vec![
                     Token::Plus,
                     Token::Minus,
-                    Token::Multiply,
-                    Token::Divide,
-                    Token::Modulo,
+                    Token::Star,
+                    Token::Slash,
+                    Token::Percent,
                     Token::Equals,
                     Token::Less,
                     Token::LessEqual,

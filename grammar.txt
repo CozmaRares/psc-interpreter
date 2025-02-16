@@ -17,7 +17,7 @@ expression ::= expression_if
              | expression_read
              | expression_print
              | assignment
-             | operation
+             | logical_operation
 
 expression_if ::= <if> expression <then> expressions (<else> expressions)? <end>
 
@@ -25,7 +25,7 @@ expression_for ::= <for> IDENTIFIER '<-' expression ',' expression (',' expressi
 
 expression_while ::= <while> expression <execute> expressions <end>
 
-expression_do_until ::= <do> expressions <until> expression
+expression_do_until ::= <do> expressions <until> expression <end>
 
 expression_continue ::= <continue>
 
@@ -47,30 +47,31 @@ expression_read ::= <read> ('<' IDENTIFIER '>')? IDENTIFIER (',' IDENTIFIER)*
 
 expression_print ::= <print> ('<' IDENTIFIER '>')? expression (',' expression)*
 
-assignment ::= <let> IDENTIFIER index_access* '<-' expression
+assignment ::= <let> IDENTIFIER index_access? '<-' expression
 
-index_access ::= '[' expression ']'
-
-operation ::= comparison ( (<and> | <or>) comparison )*
+logical_operation ::= comparison ( (<and> | <or>) comparison )*
 
 comparison ::= arith ( ('=' | '<' | '<=' | '>' | '>=' | '!=') arith )*
 
-arith ::= term ( ('+' | '-') term )*
+arith1 ::= arith2 ( ('+' | '-') arith2 )*
 
-term ::= factor ( ('*' | '/' | '%') factor )*
+arith2 ::= factor ( ('*' | '/' | '%') factor )*
 
 factor ::= base fn_call
-         | base index_access*
+         | base index_access
+         | base
 
 fn_call ::= '(' ( expression (',' expression)* )? ')'
+
+index_access ::= ( '[' expression ']' )+
 
 base ::= NUMBER
        | CHAR
        | STRING
        | IDENTIFIER
+       | '(' expression ')'
        | array
        | dictionary
-       | '(' expression ')'
        | unary
 
 array ::= '[' (expression (',' expression)*)? ']'
