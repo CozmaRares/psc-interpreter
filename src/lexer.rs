@@ -63,14 +63,14 @@ pub enum LexErrorKind {
 }
 
 #[derive(Debug, Error)]
-pub struct LexError {
+pub struct SimpleLexError {
     kind: LexErrorKind,
     line: String,
     line_number: usize,
     position: usize,
 }
 
-impl std::fmt::Display for LexError {
+impl std::fmt::Display for SimpleLexError {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let line_number_str = format!("{:>4}", self.line_number);
@@ -88,43 +88,56 @@ impl std::fmt::Display for LexError {
     }
 }
 
+#[derive(Debug, Error)]
+pub struct LexError(pub Vec<SimpleLexError>);
+
+impl std::fmt::Display for LexError {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for error in &self.0 {
+            writeln!(f, "{}", error)?;
+        }
+        Ok(())
+    }
+}
+
 impl LexError {
     #[inline]
-    fn multiple_decimals(state: &LexerState) -> Self {
+    fn multiple_decimals(state: &LexerState) -> SimpleLexError {
         Self::new(state, LexErrorKind::MultipleDecimalPoints)
     }
 
     #[inline]
-    fn invalid_number(state: &LexerState, e: std::num::ParseFloatError) -> Self {
+    fn invalid_number(state: &LexerState, e: std::num::ParseFloatError) -> SimpleLexError {
         Self::new(state, LexErrorKind::InvalidNumber(e))
     }
 
     #[inline]
-    fn invalid_escape_sequence(state: &LexerState, ch: char) -> Self {
+    fn invalid_escape_sequence(state: &LexerState, ch: char) -> SimpleLexError {
         Self::new(state, LexErrorKind::InvalidEscapeSequence(ch))
     }
 
     #[inline]
-    fn expected_apostrophe(state: &LexerState) -> Self {
+    fn expected_apostrophe(state: &LexerState) -> SimpleLexError {
         Self::new(state, LexErrorKind::ExpectedApostrophe)
     }
 
     #[inline]
-    fn expected_quote(state: &LexerState) -> Self {
+    fn expected_quote(state: &LexerState) -> SimpleLexError {
         Self::new(state, LexErrorKind::ExpectedQuote)
     }
 
     #[inline]
-    fn unknown_character(state: &LexerState) -> Self {
+    fn unknown_character(state: &LexerState) -> SimpleLexError {
         Self::new(state, LexErrorKind::UnknownCharacter)
     }
 
-    fn new(state: &LexerState, kind: LexErrorKind) -> Self {
+    fn new(state: &LexerState, kind: LexErrorKind) -> SimpleLexError {
         let next_line = state.input[state.cursor..]
             .find('\n')
             .map_or(state.input.len(), |i| i + state.cursor);
 
-        Self {
+        SimpleLexError {
             kind,
             line: state.input[state.bol..next_line].to_string(),
             position: state.cursor - state.bol,
@@ -133,8 +146,14 @@ impl LexError {
     }
 }
 
-type LexResult1 = Result<Token, LexError>;
-pub type LexResult = Result<Vec<Token>, Vec<LexError>>;
+impl From<Vec<SimpleLexError>> for LexError {
+    fn from(value: Vec<SimpleLexError>) -> Self {
+        Self(value)
+    }
+}
+
+type LexResult1 = Result<Token, SimpleLexError>;
+pub type LexResult = Result<Vec<Token>, LexError>;
 
 trait Convert<T> {
     fn convert(self) -> T;
@@ -155,7 +174,7 @@ impl Convert<LexResult> for Vec<LexResult1> {
         if errors.is_empty() {
             Ok(tokens)
         } else {
-            Err(errors)
+            Err(LexError(errors))
         }
     }
 }

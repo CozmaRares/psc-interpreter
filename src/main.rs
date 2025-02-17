@@ -13,11 +13,16 @@ fn main() -> Result<()> {
     let stdin = io::stdin();
     for line in stdin.lines() {
         let line = line?;
-        println!("Read: {}", line);
-
-        let tokens = Lexer::tokenize(&line).unwrap();
-        println!("Tokens: {:#?}", tokens);
-        println!("AST: {:#?}", Parser::parse(tokens).unwrap());
+        let tokens = match Lexer::tokenize(&line) {
+            Ok(tokens) => tokens,
+            Err(err) => {
+                println!("{}", err);
+                continue;
+            }
+        };
+        println!("{:#?}", tokens);
+        println!("{:#?}", Parser::parse(tokens));
+        println!()
     }
     Ok(())
 }
