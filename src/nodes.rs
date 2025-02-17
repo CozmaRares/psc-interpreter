@@ -1,7 +1,6 @@
 #[derive(Debug, PartialEq)]
-pub enum AST {
+pub enum Ast {
     Expressions(Expressions),
-    Expression(Expression),
     If(IfExpression),
     For(ForExpression),
     While(WhileExpression),
@@ -29,7 +28,7 @@ pub enum AST {
 pub struct Expressions(pub Vec<Expression>);
 
 #[derive(Debug, PartialEq)]
-pub struct Expression(pub Box<AST>);
+pub struct Expression(pub Box<Ast>);
 
 #[derive(Debug, PartialEq)]
 pub struct IfExpression {

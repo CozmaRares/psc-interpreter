@@ -716,7 +716,14 @@ mod tests {
         }
 
         #[test]
-        fn invalid_number() {
+        fn invald_number() {
+            let input = "12a34";
+            let result = Lexer::tokenize(input);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn multiple_decimals() {
             let input = "123.45.67";
             let result = Lexer::tokenize(input);
             assert!(result.is_err());

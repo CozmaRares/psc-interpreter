@@ -31,11 +31,11 @@ expression_continue ::= <continue>
 
 expression_break ::= <break>
 
-expression_trycatch ::= <try> expressions <catch> IDENTIFIER <then> expressions <end>
+expression_trycatch ::= <try> expressions <catch> IDENTIFIER expressions <end>
 
 expression_throw ::= <throw> expression
 
-expression_function ::= <function> IDENTIFIER '(' (IDENTIFIER (',' IDENTIFIER)*)? ')' ':' expressions <end>
+expression_function ::= <function> IDENTIFIER '(' (IDENTIFIER (',' IDENTIFIER)*)? ')' expressions <end>
 
 expression_return ::= <return> expression
 
@@ -51,7 +51,7 @@ assignment ::= <let> IDENTIFIER index_access? '<-' expression
 
 logical_operation ::= comparison ( (<and> | <or>) comparison )*
 
-comparison ::= arith ( ('=' | '<' | '<=' | '>' | '>=' | '!=') arith )*
+comparison ::= arith ( ('=' | '<' | '<=' | '>' | '>=' | '<>') arith )*
 
 arith1 ::= arith2 ( ('+' | '-') arith2 )*
 
