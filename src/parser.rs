@@ -49,8 +49,8 @@ type ParseError = ();
 //}
 
 macro_rules! assert_token {
-    ($state: ident, $expected: path) => {
-        if *$state.current() != $expected {
+    ($state: ident, $expected: pat) => {
+        if matches!(*$state.current(), $expected) {
             return Err(());
         }
         $state.advance();
@@ -67,8 +67,8 @@ macro_rules! match_token {
 }
 
 macro_rules! optional_token {
-    ($state: ident, $expected: path, $scope: block) => {
-        if *$state.current() == $expected {
+    ($state: ident, $expected: pat, $scope: block) => {
+        if matches!(*$state.current(), $expected) {
             $state.advance();
             let _ret = $scope;
             Some(_ret)
@@ -79,9 +79,14 @@ macro_rules! optional_token {
 }
 
 macro_rules! while_token {
-    ($state: ident, $expected: path, $scope: block) => {
-        while *$state.current() == $expected {
+    ($state: ident, $expected: pat, $scope: block) => {
+        while matches!(*$state.current(), $expected) {
             $state.advance();
+            $scope
+        }
+    };
+    ($state: ident, $expected: pat, $scope: block, $not_advance: expr) => {
+        while matches!(*$state.current(), $expected) {
             $scope
         }
     };
@@ -116,7 +121,7 @@ impl Parser {
         Ok(Expressions(exprs))
     }
 
-    fn expression(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression(state: &mut ParserState) -> Result<Ast, ParseError> {
         match state.current() {
             Token::If => Parser::expression_if(state),
             Token::For => Parser::expression_for(state),
@@ -137,7 +142,7 @@ impl Parser {
         }
     }
 
-    fn expression_if(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_if(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::If);
         let condition = Parser::expression(state)?;
         assert_token!(state, Token::Then);
@@ -145,16 +150,14 @@ impl Parser {
         let false_body = optional_token!(state, Token::Else, { Parser::expressions(state)? });
         assert_token!(state, Token::End);
 
-        let if_expr = Ast::If(IfExpression {
-            condition,
+        Ok(Ast::If {
+            condition: Box::new(condition),
             true_body,
             false_body,
-        });
-
-        Ok(Expression(Box::new(if_expr)))
+        })
     }
 
-    fn expression_for(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_for(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::For);
         let identifier = match_token!(state, Token::Identifier);
         assert_token!(state, Token::Assignment);
@@ -166,45 +169,48 @@ impl Parser {
         let body = Parser::expressions(state)?;
         assert_token!(state, Token::End);
 
-        let for_expr = Ast::For(ForExpression {
+        Ok(Ast::For {
             identifier,
-            start,
-            end,
-            step,
+            start: Box::new(start),
+            end: Box::new(end),
+            step: step.map(|e| Box::new(e)),
             body,
-        });
-        Ok(Expression(Box::new(for_expr)))
+        })
     }
 
-    fn expression_while(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_while(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::While);
         let condition = Parser::expression(state)?;
         assert_token!(state, Token::Execute);
         let body = Parser::expressions(state)?;
         assert_token!(state, Token::End);
 
-        let while_expr = Ast::While(WhileExpression { condition, body });
-        Ok(Expression(Box::new(while_expr)))
+        Ok(Ast::While {
+            condition: Box::new(condition),
+            body,
+        })
     }
-    fn expression_do_until(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_do_until(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Do);
         let body = Parser::expressions(state)?;
         assert_token!(state, Token::Until);
         let condition = Parser::expression(state)?;
         assert_token!(state, Token::End);
 
-        let do_until_expr = Ast::DoUntil(DoUntilExpression { condition, body });
-        Ok(Expression(Box::new(do_until_expr)))
+        Ok(Ast::DoUntil {
+            condition: Box::new(condition),
+            body,
+        })
     }
-    fn expression_continue(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_continue(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Continue);
-        Ok(Expression(Box::new(Ast::Continue)))
+        Ok(Ast::Continue)
     }
-    fn expression_break(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_break(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Break);
-        Ok(Expression(Box::new(Ast::Break)))
+        Ok(Ast::Break)
     }
-    fn expression_trycatch(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_trycatch(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Try);
         let try_body = Parser::expressions(state)?;
         assert_token!(state, Token::Catch);
@@ -212,21 +218,18 @@ impl Parser {
         let catch_body = Parser::expressions(state)?;
         assert_token!(state, Token::End);
 
-        let try_catch_expr = Ast::TryCatch(TryCatchExpression {
+        Ok(Ast::TryCatch {
             try_body,
             catch_identifier,
             catch_body,
-        });
-        Ok(Expression(Box::new(try_catch_expr)))
+        })
     }
-    fn expression_throw(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_throw(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Throw);
         let expression = Parser::expression(state)?;
-
-        let throw_expr = Ast::Throw(expression);
-        Ok(Expression(Box::new(throw_expr)))
+        Ok(Ast::Throw(Box::new(expression)))
     }
-    fn expression_function(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_function(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Function);
         let identifier = match_token!(state, Token::Identifier);
         assert_token!(state, Token::ParenLeft);
@@ -242,35 +245,31 @@ impl Parser {
         let body = Parser::expressions(state)?;
         assert_token!(state, Token::End);
 
-        let function_def = Ast::FunctionDefinition(FunctionDefinition {
+        Ok(Ast::FunctionDefinition {
             identifier,
             parameters,
             body,
-        });
-        Ok(Expression(Box::new(function_def)))
+        })
     }
-    fn expression_return(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_return(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Return);
         let expression = Parser::expression(state)?;
 
-        let return_expr = Ast::Return(expression);
-        Ok(Expression(Box::new(return_expr)))
+        Ok(Ast::Return(Box::new(expression)))
     }
-    fn expression_include(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_include(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Include);
         let string = match_token!(state, Token::String);
 
-        let include_expr = Ast::Include(string);
-        Ok(Expression(Box::new(include_expr)))
+        Ok(Ast::Include(string))
     }
-    fn expression_run(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_run(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Run);
         let string = match_token!(state, Token::String);
 
-        let run_expr = Ast::Run(string);
-        Ok(Expression(Box::new(run_expr)))
+        Ok(Ast::Run(string))
     }
-    fn expression_read(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_read(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Read);
         let file = optional_token!(state, Token::Less, {
             let file = match_token!(state, Token::Identifier);
@@ -284,10 +283,9 @@ impl Parser {
             identifiers.push(match_token!(state, Token::Identifier));
         });
 
-        let read_expr = Ast::Read(ReadExpression { file, identifiers });
-        Ok(Expression(Box::new(read_expr)))
+        Ok(Ast::Read { file, identifiers })
     }
-    fn expression_print(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn expression_print(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Print);
         let file = optional_token!(state, Token::Less, {
             let file = match_token!(state, Token::Identifier);
@@ -301,148 +299,175 @@ impl Parser {
             expressions.push(Parser::expression(state)?);
         });
 
-        let print_expr = Ast::Print(PrintExpression { file, expressions });
-        Ok(Expression(Box::new(print_expr)))
+        Ok(Ast::Print { file, expressions })
     }
-    fn assignment(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn assignment(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::Let);
         let identifier = match_token!(state, Token::Identifier);
 
-        let index_access =
-            optional_token!(state, Token::BracketLeft, { Parser::index_access(state)? })
-                .unwrap_or_default();
+        let mut indices = Vec::new();
+
+        while_token!(
+            state,
+            Token::BracketLeft,
+            {
+                indices.push(Parser::index_access(state)?);
+            },
+            ()
+        );
 
         assert_token!(state, Token::Assignment);
         let expression = Parser::expression(state)?;
 
-        let assignment_expr = Ast::Assignment(AssignmentExpression {
+        Ok(Ast::Assignment {
             identifier,
-            index_access,
-            expression,
-        });
-        Ok(Expression(Box::new(assignment_expr)))
+            index_access: indices,
+            expression: Box::new(expression),
+        })
     }
 
-    fn logical_operation(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn logical_operation(state: &mut ParserState) -> Result<Ast, ParseError> {
         let mut expr = Parser::comparison(state)?;
 
-        while *state.current() == Token::And || *state.current() == Token::Or {
-            let op = match state.advance() {
-                Token::And => LogicalOperator::And,
-                Token::Or => LogicalOperator::Or,
-                _ => unreachable!(),
-            };
-            let right = Parser::comparison(state)?;
+        while_token!(
+            state,
+            Token::And | Token::Or,
+            {
+                let op = match state.advance() {
+                    Token::And => LogicalOperator::And,
+                    Token::Or => LogicalOperator::Or,
+                    _ => unreachable!(),
+                };
+                let right = Parser::comparison(state)?;
 
-            let e = Ast::LogicalOperation(LogicalOperationExpression {
-                operator: op,
-                left: expr,
-                right,
-            });
-            expr = Expression(Box::new(e));
-        }
+                expr = Ast::LogicalOperation {
+                    operator: op,
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                };
+            },
+            ()
+        );
         Ok(expr)
     }
 
-    fn comparison(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn comparison(state: &mut ParserState) -> Result<Ast, ParseError> {
         let mut expr = Parser::arith(state)?;
 
-        while *state.current() == Token::Equals
-            || *state.current() == Token::Less
-            || *state.current() == Token::LessEqual
-            || *state.current() == Token::Greater
-            || *state.current() == Token::GreaterEqual
-            || *state.current() == Token::Different
-        {
-            let op = match state.advance() {
-                Token::Equals => ComparisonOperator::Equal,
-                Token::Less => ComparisonOperator::Less,
-                Token::LessEqual => ComparisonOperator::LessEqual,
-                Token::Greater => ComparisonOperator::Greater,
-                Token::GreaterEqual => ComparisonOperator::GreaterEqual,
-                Token::Different => ComparisonOperator::Different,
-                _ => unreachable!(),
-            };
-            let right = Parser::arith(state)?;
+        while_token!(
+            state,
+            Token::Equals
+                | Token::Less
+                | Token::LessEqual
+                | Token::Greater
+                | Token::GreaterEqual
+                | Token::Different,
+            {
+                let op = match state.advance() {
+                    Token::Equals => ComparisonOperator::Equal,
+                    Token::Less => ComparisonOperator::Less,
+                    Token::LessEqual => ComparisonOperator::LessEqual,
+                    Token::Greater => ComparisonOperator::Greater,
+                    Token::GreaterEqual => ComparisonOperator::GreaterEqual,
+                    Token::Different => ComparisonOperator::Different,
+                    _ => unreachable!(),
+                };
+                let right = Parser::arith(state)?;
 
-            let e = Ast::ComparisonOperation(ComparisonExpression {
-                operator: op,
-                left: expr,
-                right,
-            });
-            expr = Expression(Box::new(e));
-        }
+                expr = Ast::ComparisonOperation {
+                    operator: op,
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                };
+            },
+            ()
+        );
         Ok(expr)
     }
 
-    fn arith(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn arith(state: &mut ParserState) -> Result<Ast, ParseError> {
         let mut expr = Parser::arith2(state)?;
 
-        while *state.current() == Token::Plus || *state.current() == Token::Minus {
-            let op = match state.advance() {
-                Token::Plus => ArithmeticOperator::Add,
-                Token::Minus => ArithmeticOperator::Subtract,
-                _ => unreachable!(),
-            };
-            let right = Parser::arith2(state)?;
+        while_token!(
+            state,
+            Token::Plus | Token::Minus,
+            {
+                let op = match state.advance() {
+                    Token::Plus => ArithmeticOperator::Add,
+                    Token::Minus => ArithmeticOperator::Subtract,
+                    _ => unreachable!(),
+                };
+                let right = Parser::arith2(state)?;
 
-            let e = Ast::ArithmeticOperation(ArithmeticExpression {
-                operator: op,
-                left: expr,
-                right,
-            });
-            expr = Expression(Box::new(e));
-        }
+                expr = Ast::ArithmeticOperation {
+                    operator: op,
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                };
+            },
+            ()
+        );
         Ok(expr)
     }
 
-    fn arith2(state: &mut ParserState) -> Result<Expression, ParseError> {
+    fn arith2(state: &mut ParserState) -> Result<Ast, ParseError> {
         let mut expr = Parser::factor(state)?;
 
-        while *state.current() == Token::Star
-            || *state.current() == Token::Slash
-            || *state.current() == Token::Percent
-        {
-            let op = match state.advance() {
-                Token::Star => ArithmeticOperator2::Multiply,
-                Token::Slash => ArithmeticOperator2::Divide,
-                Token::Percent => ArithmeticOperator2::Modulo,
-                _ => unreachable!(),
-            };
-            let right = Parser::arith2(state)?;
+        while_token!(
+            state,
+            Token::Star | Token::Slash | Token::Percent,
+            {
+                let op = match state.advance() {
+                    Token::Star => ArithmeticOperator2::Multiply,
+                    Token::Slash => ArithmeticOperator2::Divide,
+                    Token::Percent => ArithmeticOperator2::Modulo,
+                    _ => unreachable!(),
+                };
+                let right = Parser::arith2(state)?;
 
-            let e = Ast::ArithmeticOperation2(ArithmeticOperation2 {
-                operator: op,
-                left: expr,
-                right,
-            });
-            expr = Expression(Box::new(e));
-        }
+                expr = Ast::ArithmeticOperation2 {
+                    operator: op,
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                };
+            },
+            ()
+        );
         Ok(expr)
     }
 
-    fn factor(state: &mut ParserState) -> Result<Expression, ParseError> {
-        let base = Parser::base(state)?;
+    fn factor(state: &mut ParserState) -> Result<Ast, ParseError> {
+        let mut expr = Parser::base(state)?;
 
-        match state.current() {
-            Token::BracketLeft => {
-                let index = Parser::index_access(state)?;
-                let fact = Ast::Factor(FactorExpression::IndexAccess { base, index });
-                Ok(Expression(Box::new(fact)))
-            }
-            Token::ParenLeft => {
-                let arguments = Parser::fn_call(state)?;
-                let fact = Ast::Factor(FactorExpression::FnCall { base, arguments });
-                Ok(Expression(Box::new(fact)))
-            }
-            _ => {
-                let base = Ast::Base(base);
-                Ok(Expression(Box::new(base)))
-            }
-        }
+        while_token!(
+            state,
+            Token::BracketLeft | Token::ParenLeft,
+            {
+                match state.current() {
+                    Token::BracketLeft => {
+                        let index = Parser::index_access(state)?;
+                        expr = Ast::IndexAccess {
+                            expr: Box::new(expr),
+                            index: Box::new(index),
+                        };
+                    }
+                    Token::ParenLeft => {
+                        let arguments = Parser::fn_call(state)?;
+                        expr = Ast::FnCall {
+                            expr: Box::new(expr),
+                            arguments,
+                        };
+                    }
+                    _ => unreachable!(),
+                };
+            },
+            ()
+        );
+
+        Ok(expr)
     }
 
-    fn fn_call(state: &mut ParserState) -> Result<Vec<Expression>, ParseError> {
+    fn fn_call(state: &mut ParserState) -> Result<Vec<Ast>, ParseError> {
         assert_token!(state, Token::ParenLeft);
 
         let mut arguments = Vec::new();
@@ -461,43 +486,43 @@ impl Parser {
         Ok(arguments)
     }
 
-    fn index_access(state: &mut ParserState) -> Result<Vec<Expression>, ParseError> {
-        let mut indices = Vec::new();
-        while_token!(state, Token::BracketLeft, {
-            indices.push(Parser::expression(state)?);
-            assert_token!(state, Token::BracketRight);
-        });
-        Ok(indices)
+    fn index_access(state: &mut ParserState) -> Result<Ast, ParseError> {
+        assert_token!(state, Token::BracketLeft);
+        let index = Parser::expression(state)?;
+        assert_token!(state, Token::BracketRight);
+        Ok(index)
     }
 
-    fn base(state: &mut ParserState) -> Result<BaseExpression, ParseError> {
+    fn base(state: &mut ParserState) -> Result<Ast, ParseError> {
         match state.advance() {
-            Token::Number(n) => Ok(BaseExpression::Number(n)),
-            Token::Char(c) => Ok(BaseExpression::Char(c)),
-            Token::String(s) => Ok(BaseExpression::String(s)),
-            Token::Identifier(i) => Ok(BaseExpression::Identifier(i)),
+            Token::Number(n) => Ok(Ast::Number(n)),
+            Token::Char(c) => Ok(Ast::Char(c)),
+            Token::String(s) => Ok(Ast::String(s)),
+            Token::Identifier(i) => Ok(Ast::Identifier(i)),
+
+            Token::BracketLeft => return Parser::array(state),
+            Token::CurlyLeft => return Parser::dictionary(state),
+            Token::Plus | Token::Minus => return Parser::unary(state),
             Token::ParenLeft => {
                 let expr = Parser::expression(state)?;
                 assert_token!(state, Token::ParenRight);
-                Ok(BaseExpression::Expression(expr))
+                return Ok(expr);
             }
-            Token::BracketLeft => Ok(Parser::array(state)?),
-            Token::CurlyLeft => Ok(Parser::dictionary(state)?),
-            Token::Plus | Token::Minus => Ok(Parser::unary(state)?),
+
             // FIX: error reporting might be wrong here
             // might have to use current instead of advance
-            _ => Err(()),
+            _ => return Err(()),
         }
     }
 
-    fn array(state: &mut ParserState) -> Result<BaseExpression, ParseError> {
+    fn array(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::BracketLeft);
 
         let mut elements = Vec::new();
 
         if state.current() == &Token::BracketRight {
             state.advance();
-            return Ok(BaseExpression::Array(elements));
+            return Ok(Ast::Array(elements));
         }
 
         elements.push(Parser::expression(state)?);
@@ -508,17 +533,17 @@ impl Parser {
 
         assert_token!(state, Token::BracketRight);
 
-        Ok(BaseExpression::Array(elements))
+        Ok(Ast::Array(elements))
     }
 
-    fn dictionary(state: &mut ParserState) -> Result<BaseExpression, ParseError> {
+    fn dictionary(state: &mut ParserState) -> Result<Ast, ParseError> {
         assert_token!(state, Token::CurlyLeft);
 
         let mut pairs = Vec::new();
 
         if state.current() == &Token::CurlyRight {
             state.advance();
-            return Ok(BaseExpression::Dictionary(pairs));
+            return Ok(Ast::Dictionary(pairs));
         }
 
         let mut key;
@@ -538,22 +563,22 @@ impl Parser {
 
         assert_token!(state, Token::CurlyRight);
 
-        Ok(BaseExpression::Dictionary(pairs))
+        Ok(Ast::Dictionary(pairs))
     }
 
-    fn unary(state: &mut ParserState) -> Result<BaseExpression, ParseError> {
-        match state.advance() {
-            Token::Plus => Ok(BaseExpression::Unary {
+    fn unary(state: &mut ParserState) -> Result<Ast, ParseError> {
+        Ok(match state.advance() {
+            Token::Plus => Ast::Unary {
                 operator: UnaryOperator::Plus,
-                base: Box::new(Parser::base(state)?),
-            }),
-            Token::Minus => Ok(BaseExpression::Unary {
+                expr: Box::new(Parser::base(state)?),
+            },
+            Token::Minus => Ast::Unary {
                 operator: UnaryOperator::Minus,
-                base: Box::new(Parser::base(state)?),
-            }),
+                expr: Box::new(Parser::base(state)?),
+            },
             // FIX: same thing as in base
-            _ => Err(()),
-        }
+            _ => return Err(()),
+        })
     }
 }
 

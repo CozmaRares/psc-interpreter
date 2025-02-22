@@ -47,7 +47,7 @@ expression_read ::= <read> ('<' IDENTIFIER '>')? IDENTIFIER (',' IDENTIFIER)*
 
 expression_print ::= <print> ('<' IDENTIFIER '>')? expression (',' expression)*
 
-assignment ::= <let> IDENTIFIER index_access? '<-' expression
+assignment ::= <let> IDENTIFIER index_access* '<-' expression
 
 logical_operation ::= comparison ( (<and> | <or>) comparison )*
 
@@ -57,13 +57,11 @@ arith1 ::= arith2 ( ('+' | '-') arith2 )*
 
 arith2 ::= factor ( ('*' | '/' | '%') factor )*
 
-factor ::= base fn_call
-         | base index_access
-         | base
+factor ::= base (fn_call | index_access)*
 
 fn_call ::= '(' ( expression (',' expression)* )? ')'
 
-index_access ::= ( '[' expression ']' )+
+index_access ::= '[' expression ']'
 
 base ::= NUMBER
        | CHAR
