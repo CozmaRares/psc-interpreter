@@ -21,9 +21,10 @@ impl ParserState {
         self.tokens.is_empty()
     }
 
+    // TODO: remove Token::None and instead return an error
     #[inline]
     fn advance(&mut self) -> Token {
-        self.tokens.pop_front().unwrap()
+        self.tokens.pop_front().unwrap_or(Token::None)
     }
 
     fn current(&self) -> &Token {
@@ -1282,7 +1283,7 @@ mod tests {
         #[test]
         fn adjacent_suffixes() {
             let parsed = parse!("foo()[bar]");
-            todo!()
+            assert!(parsed.is_err());
         }
     }
 
@@ -1331,7 +1332,7 @@ mod tests {
             todo!();
         }
 
-        mod unary{
+        mod unary {
             use super::*;
 
             #[test]
@@ -1350,25 +1351,25 @@ mod tests {
         #[test]
         fn unclosed_parenthesized_expression() {
             let parsed = parse!("(a + b");
-            todo!();
+            assert!(parsed.is_err());
         }
 
         #[test]
         fn invalid_array_syntax() {
             let parsed = parse!("[1, 2, 3");
-            todo!();
+            assert!(parsed.is_err());
         }
 
         #[test]
         fn invalid_dictionary_syntax() {
             let parsed = parse!("{\"key\": \"value\", \"foo\" 42}");
-            todo!();
+            assert!(parsed.is_err());
         }
 
         #[test]
         fn invalid_unary_expression() {
             let parsed = parse!("+");
-            todo!();
+            assert!(parsed.is_err());
         }
     }
 }

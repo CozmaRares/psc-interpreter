@@ -64,10 +64,10 @@ pub enum LexErrorKind {
 
 #[derive(Debug, Error)]
 pub struct SimpleLexError {
-    kind: LexErrorKind,
-    line: String,
-    line_number: usize,
-    position: usize,
+    pub kind: LexErrorKind,
+    pub line: String,
+    pub line_number: usize,
+    pub position: usize,
 }
 
 impl std::fmt::Display for SimpleLexError {
@@ -735,8 +735,15 @@ mod tests {
         }
 
         #[test]
-        fn invald_number() {
+        fn invalid_number() {
             let input = "12a34";
+            let result = Lexer::tokenize(input);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn identifier_after_number() {
+            let input = "123if";
             let result = Lexer::tokenize(input);
             assert!(result.is_err());
         }
